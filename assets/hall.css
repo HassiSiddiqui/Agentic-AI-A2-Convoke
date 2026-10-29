@@ -140,8 +140,25 @@ code, pre, .mono { font-family: "IBM Plex Mono", monospace; }
   transform: translateY(-50%);
 }
 
-.ticket b { display: block; font-family: "Syne", sans-serif; font-size: 1.2rem; }
+.ticket b {
+  display: block;
+  font-family: "Syne", sans-serif;
+  font-size: 1.05rem;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .ticket span { font-family: "IBM Plex Mono", monospace; font-size: 11px; }
+
+.nav-label {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 10px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--gold);
+  margin: 14px 0 8px;
+}
 
 .seat-grid {
   display: grid;

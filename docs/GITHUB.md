@@ -1,6 +1,6 @@
 # What you need for a GitHub repository
 
-I did not create a remote or push. Send me these and I can run the git commands for you.
+Remote: `https://github.com/HassiSiddiqui/Agentic-AI-A2-Convoke.git`
 
 ## You need
 

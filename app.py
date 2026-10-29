@@ -7,27 +7,17 @@ import streamlit as st
 
 from convoke.agent import run_cycle
 from convoke.config import Settings, settings_from_overrides
+from convoke.labels import PAGES, action_label, status_label
 from convoke.onboard import approve_allocation, onboard_event
 from convoke.paths import ROOT, SAMPLES, UPLOADS, ensure_dirs
 from convoke.seed import seed_demo
 from convoke.store import fetchall, fetchone, init_db, log_action
 from convoke.tools import tool_excel_register, tool_update_session_fact
 
-PAGES = [
-    "Home",
-    "Create event",
-    "Run review",
-    "Confirm seats",
-    "Notices",
-    "Records",
-    "Settings",
-]
-
 st.set_page_config(page_title="Convoke · Event coordinator", page_icon="🎟️", layout="wide")
 ensure_dirs()
 init_db()
-css = (ROOT / "assets" / "hall.css").read_text(encoding="utf-8")
-st.markdown(f"<style>{css}</style>", unsafe_allow_html=True)
+st.markdown(f"<style>{(ROOT / 'assets' / 'hall.css').read_text(encoding='utf-8')}</style>", unsafe_allow_html=True)
 
 if "smtp_password" not in st.session_state:
     st.session_state.smtp_password = ""
@@ -68,20 +58,42 @@ def page_heading(kicker: str, title: str, blurb: str) -> None:
     )
 
 
+def pretty_placements(rows: list[dict]) -> pd.DataFrame:
+    if not rows:
+        return pd.DataFrame()
+    frame = pd.DataFrame(rows)
+    frame["status"] = frame["agent_status"].map(status_label)
+    frame["follow_up"] = frame["next_action"].map(action_label)
+    keep = [col for col in ["participant_id", "session_id", "status", "follow_up", "evidence", "blocker"] if col in frame.columns]
+    return frame[keep]
+
+
 with st.sidebar:
     st.markdown('<p class="kicker">Convoke</p>', unsafe_allow_html=True)
-    st.markdown("### Academic events")
-    st.caption("Seat people, keep a waitlist, and remember decisions after restart.")
-    page = st.radio("Go to", PAGES, key="nav")
+    st.markdown("### Event coordinator")
+    st.caption("Allocate lab seats, keep a waitlist, and remember decisions after restart.")
+    st.markdown('<p class="nav-label">Pages</p>', unsafe_allow_html=True)
+    for name, hint in PAGES:
+        clicked = st.button(
+            name,
+            key=f"nav-{name}",
+            use_container_width=True,
+            type="primary" if st.session_state.nav == name else "secondary",
+            help=hint,
+        )
+        if clicked and st.session_state.nav != name:
+            go(name)
+
+    page = st.session_state.nav
     events = fetchall("SELECT event_id, title FROM events ORDER BY created_at")
     event_ids = [row["event_id"] for row in events] or ["EVT-OPENDAY"]
-    event_id = st.selectbox("Working event", event_ids)
+    event_id = st.selectbox("Current event", event_ids, help="Each event has its own memory.")
     cycle_id = st.number_input("Review cycle", min_value=1, max_value=12, value=1, step=1)
     st.divider()
     if st.button("Load demo events", use_container_width=True):
         seed_demo()
         st.rerun()
-    st.caption("Demo loads Open Day and an isolated poster event. Saved state is in SQLite and survives closing the app.")
+    st.caption("Loads Open Day and Poster Hour. Close the app and reopen to show restart.")
 
 
 if page == "Home":
@@ -90,19 +102,20 @@ if page == "Home":
     allocations = fetchall("SELECT * FROM allocations WHERE event_id=? AND is_current=1", (event_id,))
     wait = fetchall("SELECT * FROM waitlist WHERE event_id=? AND is_current=1", (event_id,))
     working = fetchone("SELECT * FROM working_state WHERE event_id=?", (event_id,))
-    title = event["title"] if event else "No event yet — create one or load the demo"
+    title = event["title"] if event else "No event loaded"
     confirmed = sum(1 for row in allocations if row["agent_status"] == "Evidence supports completion")
+    next_step = (working or {}).get("current_goal") or "Create an event or load the demo"
 
     st.markdown(
         f"""
         <div class="hero">
-          <div class="kicker">A14 academic event coordinator · 23i-2654</div>
+          <div class="kicker">Assignment 2 · A14 · 23i-2654</div>
           <h1>Convoke</h1>
-          <p>Allocate limited lab sessions, waitlist overflow, and follow cancellations. The agent remembers approved capacities and earlier decisions after you restart the app.</p>
+          <p>A working desk for academic sessions with limited seats. Upload registrations, confirm or waitlist people, and keep notices unsent until you approve email.</p>
           <div class="ticket-row">
-            <div class="ticket"><span>Event</span><b>{title}</b></div>
+            <div class="ticket"><span>Event</span><b title="{title}">{title}</b></div>
             <div class="ticket"><span>Sessions</span><b>{len(sessions)}</b></div>
-            <div class="ticket"><span>Confirmed seats</span><b>{confirmed}</b></div>
+            <div class="ticket"><span>Confirmed</span><b>{confirmed}</b></div>
             <div class="ticket"><span>Waitlist</span><b>{len(wait)}</b></div>
           </div>
         </div>
@@ -110,33 +123,42 @@ if page == "Home":
         unsafe_allow_html=True,
     )
 
-    st.markdown("#### Start here")
+    if not event:
+        st.info("Nothing is saved yet. Load the demo events, or create your own.")
+        empty_a, empty_b = st.columns(2)
+        with empty_a:
+            if st.button("Load demo events", type="primary", use_container_width=True, key="home-demo"):
+                seed_demo()
+                st.rerun()
+        with empty_b:
+            if st.button("Create an event", use_container_width=True, key="home-create"):
+                go("Create event")
+
+    st.markdown("#### Workflow")
     a, b, c, d = st.columns(4)
-    with a:
-        st.markdown('<div class="action-card"><h4>1. Create event</h4><p>Save the two sessions and capacities once.</p></div>', unsafe_allow_html=True)
-        if st.button("Open create event", use_container_width=True):
-            go("Create event")
-    with b:
-        st.markdown('<div class="action-card"><h4>2. Run review</h4><p>Ingest a registration file and seat people.</p></div>', unsafe_allow_html=True)
-        if st.button("Open run review", use_container_width=True):
-            go("Run review")
-    with c:
-        st.markdown('<div class="action-card"><h4>3. Confirm seats</h4><p>Keep your decision separate from the agent.</p></div>', unsafe_allow_html=True)
-        if st.button("Open confirm seats", use_container_width=True):
-            go("Confirm seats")
-    with d:
-        st.markdown('<div class="action-card"><h4>4. Notices</h4><p>Drafts stay unsent unless you approve email.</p></div>', unsafe_allow_html=True)
-        if st.button("Open notices", use_container_width=True):
-            go("Notices")
+    cards = [
+        (a, "Create event", "Save two sessions and their capacities once.", "Create event"),
+        (b, "Run review", "Read a registration file and allocate seats.", "Run review"),
+        (c, "Confirm seats", "Record your decision without changing the agent status.", "Confirm seats"),
+        (d, "Notices", "Keep drafts local, or send after you approve email.", "Notices"),
+    ]
+    for col, heading, text, target in cards:
+        with col:
+            st.markdown(
+                f'<div class="action-card"><h4>{heading}</h4><p>{text}</p></div>',
+                unsafe_allow_html=True,
+            )
+            if st.button(heading, use_container_width=True, key=f"jump-{target}"):
+                go(target)
 
     m1, m2, m3, m4 = st.columns(4)
-    m1.metric("Groq (LLM)", "Needs internet")
-    m2.metric("Send email", "Optional, needs internet")
-    m3.metric("Seats, SQLite, Excel", "Works offline")
-    m4.metric("Recommended next step", (working or {}).get("current_goal") or "Create or load an event")
+    m1.metric("Language model (Groq)", "Needs internet")
+    m2.metric("Send email", "Optional")
+    m3.metric("Seats and Excel", "Works offline")
+    m4.metric("Next step", next_step)
 
     st.markdown("#### Seat map")
-    st.caption("Copper = confirmed · Gold = waitlist or review · Green = open")
+    st.caption("Copper = confirmed · Gold = waitlist or review · Green = unused slot")
     seats_html = '<div class="seat-grid">'
     for row in allocations[:24]:
         klass = "taken" if row["agent_status"] == "Evidence supports completion" else "wait"
@@ -148,7 +170,7 @@ if page == "Home":
 
     if working:
         st.markdown(
-            f'<span class="badge gold">saved checkpoint</span> Cycle {working["cycle_id"]} · {working["current_goal"]}',
+            f'<span class="badge gold">checkpoint</span> Cycle {working["cycle_id"]} · {working["current_goal"]}',
             unsafe_allow_html=True,
         )
         if working.get("pending_question"):
@@ -156,7 +178,7 @@ if page == "Home":
 
     if sessions:
         st.markdown("#### Sessions")
-        cards = '<div class="session-board">'
+        cards_html = '<div class="session-board">'
         for sess in sessions:
             cap = int(sess["capacity"] or 0)
             taken = sum(
@@ -166,29 +188,29 @@ if page == "Home":
                 and row["agent_status"] == "Evidence supports completion"
             )
             pct = 0 if cap == 0 else min(100, int(100 * taken / cap))
-            cards += (
+            cards_html += (
                 f'<div class="session-card"><div class="meta">{sess["session_id"]} · {sess["room"]} · '
                 f'{sess["starts_at"]}–{sess["ends_at"]}</div><h4>{sess["name"]}</h4>'
-                f'<p>{taken} confirmed of {cap} approved seats</p>'
+                f"<p>{taken} of {cap} approved seats filled</p>"
                 f'<div class="capacity-bar"><span style="width:{pct}%"></span></div></div>'
             )
-        cards += "</div>"
-        st.markdown(cards, unsafe_allow_html=True)
+        cards_html += "</div>"
+        st.markdown(cards_html, unsafe_allow_html=True)
 
     e1, e2 = st.columns(2)
     with e1:
-        if st.button("View records and logs", use_container_width=True):
+        if st.button("Open records and logs", use_container_width=True):
             go("Records")
     with e2:
-        if st.button("API keys and email", use_container_width=True):
+        if st.button("Open settings", use_container_width=True):
             go("Settings")
 
 
 elif page == "Create event":
     page_heading(
-        "Step 1",
+        "Step 1 of 4",
         "Create event",
-        "Approve the baseline once. Later reviews reload it from SQLite, so you do not upload this again.",
+        "Approve the baseline once. Later cycles reload it from SQLite, so you do not upload this form again.",
     )
     col_a, col_b = st.columns(2)
     with col_a:
@@ -198,31 +220,32 @@ elif page == "Create event":
         date = st.text_input("Date", value="2026-11-12")
     with col_b:
         st.markdown("**Session A**")
-        a_id = st.text_input("Session A ID", value="SESS-A")
-        a_name = st.text_input("Session A name", value="Prompting Studio")
-        a_room = st.text_input("Session A room", value="Lab 4")
+        a_id = st.text_input("ID", value="SESS-A", key="a_id")
+        a_name = st.text_input("Name", value="Prompting Studio", key="a_name")
+        a_room = st.text_input("Room", value="Lab 4", key="a_room")
         a_start, a_end, a_cap = st.columns(3)
         with a_start:
             a_starts = st.text_input("Starts", value="10:00")
         with a_end:
             a_ends = st.text_input("Ends", value="11:20")
         with a_cap:
-            a_capacity = st.number_input("Capacity", min_value=1, max_value=80, value=4, key="a_cap")
+            a_capacity = st.number_input("Seats", min_value=1, max_value=80, value=4, key="a_cap")
+
     st.markdown("**Session B**")
     b1, b2, b3 = st.columns(3)
     with b1:
-        b_id = st.text_input("Session B ID", value="SESS-B")
-        b_name = st.text_input("Session B name", value="Agent Clinic")
+        b_id = st.text_input("ID", value="SESS-B", key="b_id")
+        b_name = st.text_input("Name", value="Agent Clinic", key="b_name")
     with b2:
-        b_room = st.text_input("Session B room", value="Lab 5")
-        b_starts = st.text_input("Session B starts", value="10:00")
+        b_room = st.text_input("Room", value="Lab 5", key="b_room")
+        b_starts = st.text_input("Starts", value="10:00", key="b_starts")
     with b3:
-        b_ends = st.text_input("Session B ends", value="11:20")
-        b_capacity = st.number_input("Session B capacity", min_value=1, max_value=80, value=4, key="b_cap")
+        b_ends = st.text_input("Ends", value="11:20", key="b_ends")
+        b_capacity = st.number_input("Seats", min_value=1, max_value=80, value=4, key="b_cap")
 
     save, demo = st.columns(2)
     with save:
-        if st.button("Save approved baseline", type="primary", use_container_width=True):
+        if st.button("Save event", type="primary", use_container_width=True):
             result = onboard_event(
                 eid,
                 "org-haseeb",
@@ -249,20 +272,21 @@ elif page == "Create event":
                 ],
             )
             if result.get("created"):
-                st.success(f"Saved {eid}. Next: Run review.")
+                st.success(f"Saved {eid}. Continue with Run review.")
             else:
-                st.info(f"{eid} already exists. Use a new ID or continue to Run review.")
+                st.info(f"{eid} already exists. Choose a new ID, or continue with Run review.")
     with demo:
-        if st.button("Load both demo events instead", use_container_width=True):
-            st.json(seed_demo())
-            st.success("Loaded EVT-OPENDAY and EVT-POSTER. Open Run review next.")
+        if st.button("Load demo instead", use_container_width=True):
+            seed_demo()
+            st.success("Loaded Open Day and Poster Hour. Open Run review.")
+            st.rerun()
 
 
 elif page == "Run review":
     page_heading(
-        "Step 2",
+        "Step 2 of 4",
         "Run review",
-        "The model chooses the next follow-up. Python counts seats and writes SQLite. Close the app between cycles to show restart.",
+        "Python counts seats. The model only chooses the follow-up. Close Streamlit between cycles to demonstrate restart.",
     )
     default_files = {
         1: str(SAMPLES / "registrations_cycle1.csv"),
@@ -270,28 +294,28 @@ elif page == "Run review":
         3: str(SAMPLES / "updates_cycle3.csv"),
     }
     path = st.text_input(
-        "Registration file path",
+        "Registration file",
         value=default_files.get(int(cycle_id), str(SAMPLES / "registrations_cycle1.csv")),
-        help="Cycle 1 = eight attendees. Cycle 2 = cancellation and missing preference. Cycle 3 = late registration after restart.",
+        help="Cycle 1: eight people. Cycle 2: cancellation and a missing preference. Cycle 3: late registration after restart.",
     )
-    uploaded = st.file_uploader("Or upload CSV, TXT, JSON, or PDF", type=["csv", "txt", "pdf", "json"])
+    uploaded = st.file_uploader("Or drop a CSV, TXT, JSON, or PDF", type=["csv", "txt", "pdf", "json"])
     if uploaded:
         dest = UPLOADS / uploaded.name
         dest.write_bytes(uploaded.getvalue())
         path = str(dest)
-        st.caption(f"Using uploaded file {dest.name}")
+        st.caption(f"Using {dest.name}")
 
     opt1, opt2 = st.columns(2)
     with opt1:
-        memory_on = st.toggle("Use saved memory", value=True, help="Turn off only for the memory-off diagnostic comparison.")
-        send = st.toggle("Send notices by email", value=False, help="Also tick send approval on the Notices page and add SMTP in Settings.")
+        memory_on = st.toggle("Use saved memory", value=True, help="Turn off only for the memory-off comparison.")
+        send = st.toggle("Send email this cycle", value=False, help="Requires approval on Notices and SMTP in Settings.")
     with opt2:
         fail_write = st.toggle("Simulate save failure", value=False)
         fail_mail = st.toggle("Simulate email failure", value=False)
 
     if st.button("Run this cycle", type="primary"):
         settings = current_settings()
-        with st.spinner("Reviewing registrations and remaining seats…"):
+        with st.spinner("Reading the file and counting remaining seats…"):
             result = run_cycle(
                 settings=settings,
                 event_id=event_id,
@@ -308,7 +332,7 @@ elif page == "Run review":
         badge = "warn" if plan.get("uncertain") else "ok"
         mode = "offline planner" if plan.get("fallback") else plan.get("model", "groq")
         st.markdown(
-            f'<span class="badge {badge}">{plan.get("next_action")}</span> '
+            f'<span class="badge {badge}">{action_label(plan.get("next_action"))}</span> '
             f'<span class="badge idle">{mode}</span>',
             unsafe_allow_html=True,
         )
@@ -323,27 +347,27 @@ elif page == "Run review":
             st.markdown("**Tools used**")
             st.write(", ".join(result.get("tools_run") or []))
         st.markdown("**Placements**")
-        st.dataframe(pd.DataFrame(result["capacity"]["placements"]), hide_index=True, use_container_width=True)
+        st.dataframe(pretty_placements(result["capacity"]["placements"]), hide_index=True, use_container_width=True)
         if result["flagged_injections"]:
-            st.error("A source file contained an instruction-like note. Capacity, recipients, and permissions were not changed.")
+            st.error("The file contained an instruction-like note. Capacity, recipients, and permissions were not changed.")
         if not result["recorded"].get("ok"):
             st.error(result["recorded"])
         else:
             st.success(f"Excel register updated: {result['register_path']}")
             n1, n2 = st.columns(2)
             with n1:
-                if st.button("Confirm these seats"):
+                if st.button("Go to Confirm seats", type="primary"):
                     go("Confirm seats")
             with n2:
-                if st.button("Open notices"):
+                if st.button("Go to Notices"):
                     go("Notices")
 
 
 elif page == "Confirm seats":
     page_heading(
-        "Step 3",
+        "Step 3 of 4",
         "Confirm seats",
-        "Your decision is stored separately from the agent suggestion. Excel exports keep your comments.",
+        "Your decision is stored separately from the agent suggestion. Excel keeps your comments on re-export.",
     )
     rows = fetchall(
         """
@@ -354,54 +378,58 @@ elif page == "Confirm seats":
         (event_id, int(cycle_id)),
     )
     if not rows:
-        st.info("No allocations for this cycle yet. Open Run review first.")
-        if st.button("Go to Run review"):
+        st.info("No placements for this cycle. Run a review first.")
+        if st.button("Go to Run review", type="primary"):
             go("Run review")
     for row in rows:
-        with st.expander(f"{row['display_name']} · agent: {row['agent_status']}"):
+        with st.expander(f"{row['display_name']} · {status_label(row['agent_status'])}"):
             st.write(f"Evidence: {row['evidence']}")
             st.write(f"Blocker: {row['blocker'] or 'None'}")
-            st.write(f"Recommended next action: {row['next_action']}")
+            st.write(f"Suggested follow-up: {action_label(row['next_action'])}")
             decision = st.selectbox(
                 "Your decision",
                 ["", "Confirmed", "Rejected", "Needs review", "Waitlisted"],
                 key=f"d-{row['allocation_id']}",
             )
             comment = st.text_input("Comment (optional)", key=f"c-{row['allocation_id']}")
-            if st.button("Save your decision", key=f"s-{row['allocation_id']}"):
+            if st.button("Save decision", key=f"s-{row['allocation_id']}"):
                 approve_allocation(event_id, int(cycle_id), row["participant_id"], decision, comment)
-                st.success("Saved. This does not overwrite the agent status.")
+                st.success("Saved. The agent status is unchanged.")
 
     st.markdown("---")
     st.markdown("#### Change an approved fact")
-    st.caption("Example: shrink a room after a projector failure. The old capacity stays in history.")
+    st.caption("Example: reduce capacity after a room problem. The previous number stays in history.")
     sessions = fetchall("SELECT session_id, name, capacity FROM sessions WHERE event_id=? AND is_current=1", (event_id,))
     if sessions:
-        labels = {s["session_id"]: f"{s['name']} ({s['session_id']}, capacity {s['capacity']})" for s in sessions}
+        labels = {s["session_id"]: f"{s['name']} ({s['session_id']}, {s['capacity']} seats)" for s in sessions}
         sid = st.selectbox("Session", list(labels), format_func=lambda x: labels.get(x, x))
         new_cap = st.number_input("New capacity", min_value=1, max_value=40, value=3)
-        reason = st.text_input("Reason", value="Room projector failed; reduce Agent Clinic")
-        if st.button("Approve capacity change"):
+        reason = st.text_input("Reason", value="Projector failed; reduce Agent Clinic")
+        if st.button("Save capacity change"):
             result = tool_update_session_fact(event_id, sid, "capacity", str(int(new_cap)), "organizer", reason)
-            st.success(f"Capacity {result.get('old')} → {result.get('new')}. Later reviews use the new value.")
+            st.success(f"Capacity {result.get('old')} → {result.get('new')}. The next review uses the new value.")
 
 
 elif page == "Notices":
     page_heading(
-        "Step 4",
+        "Step 4 of 4",
         "Notices",
-        "Every notice is an UNSENT local draft until you approve sending and add SMTP details in Settings.",
+        "Drafts stay on disk as UNSENT until you approve sending and add SMTP details in Settings.",
     )
     notices = fetchall("SELECT * FROM notices WHERE event_id=? ORDER BY notice_id DESC", (event_id,))
     if notices:
-        st.dataframe(pd.DataFrame(notices), hide_index=True, use_container_width=True)
+        view = pd.DataFrame(notices)
+        keep = [c for c in ["notice_id", "participant_id", "cycle_id", "subject", "recipient", "status", "delivery_outcome", "approved"] if c in view.columns]
+        st.dataframe(view[keep], hide_index=True, use_container_width=True)
     else:
         st.info("No drafts yet. Run a review cycle first.")
+        if st.button("Go to Run review"):
+            go("Run review")
     st.session_state.send_approved = st.checkbox(
-        "I approve sending the next batch to allowlisted addresses only",
+        "I approve sending the next batch, but only to addresses on the allowlist",
         value=st.session_state.send_approved,
     )
-    st.caption("Passwords typed in Settings stay in this browser session. They are not saved in SQLite.")
+    st.caption("SMTP passwords typed in Settings stay in this browser session. They are not written to SQLite.")
     if st.button("Open email settings"):
         go("Settings")
 
@@ -410,7 +438,7 @@ elif page == "Records":
     page_heading(
         "Memory",
         "Records",
-        "SQLite is the source of truth. Excel is a review copy and will not overwrite your decisions.",
+        "SQLite is authoritative. Excel is a review copy and does not overwrite your decisions.",
     )
     tabs = st.tabs(["Allocations", "Capacity history", "Action log", "Event isolation"])
     with tabs[0]:
@@ -423,7 +451,7 @@ elif page == "Records":
         logs = fetchall("SELECT * FROM action_log ORDER BY log_id DESC LIMIT 200")
         st.dataframe(pd.DataFrame(logs) if logs else pd.DataFrame(), hide_index=True, use_container_width=True)
     with tabs[3]:
-        other = st.text_input("Compare against another event ID", value="EVT-POSTER")
+        other = st.text_input("Other event ID", value="EVT-POSTER")
         leaked = fetchall("SELECT participant_id, display_name, event_id FROM participants WHERE event_id=?", (other,))
         mine = fetchall("SELECT participant_id, display_name, event_id FROM participants WHERE event_id=?", (event_id,))
         c1, c2 = st.columns(2)
@@ -447,30 +475,29 @@ elif page == "Records":
 
 elif page == "Settings":
     page_heading(
-        "Local only",
+        "This machine only",
         "Settings",
-        "Keys stay on this machine. Groq is free-tier. Email is optional.",
+        "Keys stay local. Groq is free-tier. Email is optional.",
     )
     default = Settings()
     st.markdown("#### Groq")
-    st.session_state.groq_key = st.text_input("Groq API key", type="password", value=default.groq_api_key)
+    st.session_state.groq_key = st.text_input("API key", type="password", value=default.groq_api_key)
     st.session_state.groq_model = st.text_input("Model", value=default.groq_model)
-    st.caption("Needs internet. If the key is empty, Convoke still seats people with the offline planner.")
+    st.caption("Needs internet. If the key is empty, Convoke still allocates seats with the offline planner.")
     st.markdown("#### Optional email")
     st.session_state.smtp_host = st.text_input("SMTP host", value=default.smtp_host)
     st.session_state.smtp_port = st.number_input("SMTP port", value=default.smtp_port)
-    st.session_state.smtp_user = st.text_input("SMTP username / Gmail", value=default.smtp_username)
-    st.session_state.smtp_password = st.text_input("SMTP password or Gmail app password", type="password")
+    st.session_state.smtp_user = st.text_input("Username / Gmail", value=default.smtp_username)
+    st.session_state.smtp_password = st.text_input("Password or Gmail app password", type="password")
     st.session_state.smtp_from = st.text_input("From address", value=default.smtp_from)
     st.session_state.smtp_allow = st.text_input("Allowed recipients (comma-separated)", value=default.smtp_allowlist)
     st.markdown(
         """
-**Internet**
-- Groq decisions: required for the LLM, optional if you accept the offline planner.
-- Sending email: required, and only after you approve on Notices.
-- Creating events, counting seats, SQLite, Excel, local drafts: work offline.
+**When you need the internet**
 
-Do not put keys in CSV files or commit `.env`.
+- Groq: yes, unless you use the offline planner.
+- Sending email: yes, and only after you tick approval on Notices.
+- Creating events, counting seats, SQLite, Excel, local drafts: no.
         """
     )
     log_action(event_id, None, "ui", payload={"page": "settings"}, outcome="viewed")
