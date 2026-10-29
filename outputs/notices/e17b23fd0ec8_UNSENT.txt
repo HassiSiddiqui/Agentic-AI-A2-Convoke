@@ -1,0 +1,11 @@
+TO: dania@example.com
+SUBJECT: [Convoke] confirm · cycle 1
+STATUS: UNSENT
+
+Hello Dania Rauf,
+
+Suggested status: Evidence supports completion
+Evidence: SESS-A seats used 4/4
+Next action: draft_confirmation
+This notice is a draft until the organizer approves sending.
+

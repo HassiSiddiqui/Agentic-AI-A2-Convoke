@@ -1,0 +1,15 @@
+.env
+Agentic_AI_assignment-2_Ideas.xlsx
+.venv/
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.streamlit/secrets.toml
+.idea/
+.vscode/
+*.zip
+data/store/*.sqlite
+data/store/*.sqlite-*
+data/uploads/*
+!data/uploads/.gitkeep

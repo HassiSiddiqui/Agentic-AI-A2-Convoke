@@ -1,0 +1,17 @@
+{
+  "event_id": "EVT-POSTER",
+  "organizer_id": "org-haseeb",
+  "title": "DS Poster Hour",
+  "venue": "Library Gallery",
+  "event_date": "2026-11-13",
+  "sessions": [
+    {
+      "session_id": "POSTER-1",
+      "name": "Poster Walk",
+      "room": "Gallery",
+      "starts_at": "14:00",
+      "ends_at": "16:00",
+      "capacity": 6
+    }
+  ]
+}

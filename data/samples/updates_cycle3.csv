@@ -1,0 +1,3 @@
+participant_id,name,email,preference,dietary,note
+P03,Cyrus Malik,cyrus@example.com,SESS-A,none,still attending
+P11,Jameel Iqbal,jameel@example.com,SESS-B,none,late registration after restart

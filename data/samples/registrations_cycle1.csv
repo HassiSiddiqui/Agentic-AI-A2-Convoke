@@ -1,0 +1,9 @@
+participant_id,name,email,preference,dietary
+P01,Amina Tariq,amina@example.com,SESS-A,vegetarian
+P02,Bilal Khan,bilal@example.com,SESS-A,none
+P03,Cyrus Malik,cyrus@example.com,SESS-A,none
+P04,Dania Rauf,dania@example.com,SESS-A,halal
+P05,Ehsan Noor,ehsan@example.com,SESS-A,none
+P06,Farah Qureshi,farah@example.com,SESS-B,vegetarian
+P07,Ghulam Abbas,ghulam@example.com,SESS-B,none
+P08,Hira Saeed,hira@example.com,SESS-B,none

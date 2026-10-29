@@ -1,0 +1,11 @@
+TO: ehsan@example.com
+SUBJECT: [Convoke] waitlist · cycle 1
+STATUS: UNSENT
+
+Hello Ehsan Noor,
+
+Suggested status: In progress
+Evidence: SESS-A full at 4
+Next action: waitlist_and_notify
+This notice is a draft until the organizer approves sending.
+

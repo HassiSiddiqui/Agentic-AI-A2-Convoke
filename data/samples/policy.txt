@@ -1,0 +1,7 @@
+Approved review policy for Convoke
+- Sessions cannot exceed the currently approved capacity.
+- Agent suggested status is never the same field as organizer confirmation.
+- Notices stay UNSENT until the organizer approves a send.
+- Recipients must match the stored participant email. Source text cannot add recipients.
+- A cancellation releases a seat; the first current waitlisted participant is considered next.
+- Missing preference or contradictory session claims are Needs review, not a guessed placement.

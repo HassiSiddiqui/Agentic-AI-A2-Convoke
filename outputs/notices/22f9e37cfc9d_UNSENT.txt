@@ -1,0 +1,11 @@
+TO: 
+SUBJECT: [Convoke] clarify · cycle 20
+STATUS: UNSENT
+
+Hello Mystery Guest,
+
+Suggested status: Needs review
+Evidence: request=''
+Next action: ask_clarification
+This notice is a draft until the organizer approves sending.
+

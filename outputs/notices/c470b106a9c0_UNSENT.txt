@@ -1,0 +1,11 @@
+TO: jameel@example.com
+SUBJECT: [Convoke] confirm · cycle 30
+STATUS: UNSENT
+
+Hello Jameel Iqbal,
+
+Suggested status: Evidence supports completion
+Evidence: SESS-B seats used 1/3
+Next action: draft_confirmation
+This notice is a draft until the organizer approves sending.
+

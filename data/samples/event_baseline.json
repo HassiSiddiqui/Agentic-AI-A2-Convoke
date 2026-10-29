@@ -1,0 +1,25 @@
+{
+  "event_id": "EVT-OPENDAY",
+  "organizer_id": "org-haseeb",
+  "title": "FAST-NUCES Agentic Systems Open Day",
+  "venue": "CS Atrium, Islamabad Campus",
+  "event_date": "2026-11-12",
+  "sessions": [
+    {
+      "session_id": "SESS-A",
+      "name": "Prompting Studio",
+      "room": "Lab 4",
+      "starts_at": "10:00",
+      "ends_at": "11:20",
+      "capacity": 4
+    },
+    {
+      "session_id": "SESS-B",
+      "name": "Agent Clinic",
+      "room": "Lab 5",
+      "starts_at": "10:00",
+      "ends_at": "11:20",
+      "capacity": 4
+    }
+  ]
+}

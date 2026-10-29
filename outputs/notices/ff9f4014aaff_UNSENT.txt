@@ -1,0 +1,11 @@
+TO: 
+SUBJECT: [Convoke] confirm · cycle 30
+STATUS: UNSENT
+
+Hello P08,
+
+Suggested status: Evidence supports completion
+Evidence: promoted from waitlist into SESS-B
+Next action: draft_confirmation
+This notice is a draft until the organizer approves sending.
+

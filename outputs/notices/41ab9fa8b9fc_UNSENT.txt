@@ -1,0 +1,5 @@
+TO: amina@example.com
+SUBJECT: retry subject
+STATUS: UNSENT
+
+retry body
